@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 聊天气泡 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,26 C40,26 29,35 29,46 C29,57 40,66 54,66 C57,66 60,65.5 62.5,64.6 L74,72 L70.5,61 C75.5,57.2 79,51.9 79,46 C79,35 68,26 54,26 Z" />
+    <!-- 闪电 -->
+    <path
+        android:fillColor="#2962FF"
+        android:pathData="M56,32 L46,48 L53,48 L50,60 L62,43 L54,43 Z" />
+</vector>
