@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.schat.app.data.User
@@ -34,8 +35,6 @@ fun NewChatScreen(
     var query by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<User>>(emptyList()) }
     var showGroupDialog by remember { mutableStateOf(false) }
-    var selectedUsers by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var groupName by remember { mutableStateOf("") }
     var isCreating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -68,16 +67,9 @@ fun NewChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            if (users.isEmpty()) {
-                                showGroupDialog = true // 打开对话框，里面会提示去搜索
-                            } else if (!isCreating) {
-                                showGroupDialog = true
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Filled.Group, "创建群聊")
+                    // 从通讯录选人建群
+                    IconButton(onClick = { if (!isCreating) showGroupDialog = true }) {
+                        Icon(Icons.Filled.PersonAdd, "创建群聊")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -158,11 +150,31 @@ fun NewChatScreen(
         }
     }
 
-    // 建群对话框
+    // 建群对话框（从通讯录多选，不再依赖全站搜索）
     if (showGroupDialog) {
+        var contacts by remember { mutableStateOf<List<User>?>(null) } // null = 加载中
+        var searchQuery by remember { mutableStateOf("") }
+        var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+        var groupName by remember { mutableStateOf("") }
+
+        // 打开时加载通讯录
+        LaunchedEffect(Unit) {
+            vm.loadContacts { list -> contacts = list }
+        }
+
+        // 本地搜索过滤（只过滤联系人）
+        val filtered = remember(contacts, searchQuery) {
+            val all = contacts ?: emptyList()
+            val q = searchQuery.trim()
+            if (q.isEmpty()) all
+            else all.filter {
+                it.username.contains(q, true) || it.displayName.contains(q, true)
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { if (!isCreating) showGroupDialog = false },
-            title = { Text("创建群聊") },
+            title = { Text("创建群聊", fontWeight = FontWeight.SemiBold) },
             text = {
                 Column {
                     OutlinedTextField(
@@ -173,52 +185,94 @@ fun NewChatScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("已选 ${selectedUsers.size} 人", fontSize = 14.sp, color = TextSecondary)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("搜索联系人...", fontSize = 14.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("已选 ${selectedIds.size} 人", fontSize = 12.sp, color = TextSecondary)
                     Spacer(modifier = Modifier.height(4.dp))
-                    if (users.isEmpty()) {
-                        // 没搜过用户，提示去搜索
-                        Box(
-                            modifier = Modifier.height(200.dp).fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("请先搜索用户，再选择群成员", color = TextSecondary, fontSize = 14.sp)
-                        }
-                    } else {
-                        LazyColumn(modifier = Modifier.height(200.dp)) {
-                        items(users, key = { it.id }) { user ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedUsers = if (user.id in selectedUsers)
-                                            selectedUsers - user.id
-                                        else selectedUsers + user.id
-                                    }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+
+                    when {
+                        contacts == null -> {
+                            // 加载中
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Checkbox(
-                                    checked = user.id in selectedUsers,
-                                    onCheckedChange = {
-                                        selectedUsers = if (it) selectedUsers + user.id
-                                        else selectedUsers - user.id
-                                    }
-                                )
-                                Text(user.displayName, fontSize = 14.sp)
-                                Text(" @${user.username}", fontSize = 12.sp, color = TextSecondary)
+                                CircularProgressIndicator()
                             }
                         }
-                    }
+                        filtered.isEmpty() -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (contacts.isNullOrEmpty())
+                                        "暂无联系人\n先和人发起聊天后，就能拉他建群了"
+                                    else "未找到匹配的联系人",
+                                    fontSize = 13.sp,
+                                    color = TextSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        else -> {
+                            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
+                                items(filtered, key = { it.id }) { user ->
+                                    val isSelected = user.id in selectedIds
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedIds = if (isSelected) selectedIds - user.id
+                                                else selectedIds + user.id
+                                            }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = null
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Avatar(
+                                            name = user.displayName.ifBlank { user.username },
+                                            avatarUrl = user.avatarUrl,
+                                            size = 36
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = user.displayName.ifBlank { user.username },
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = "@${user.username}",
+                                                fontSize = 12.sp,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (groupName.isNotBlank() && selectedUsers.isNotEmpty() && !isCreating) {
+                        if (groupName.isNotBlank() && selectedIds.isNotEmpty() && !isCreating) {
                             isCreating = true
                             val name = groupName.trim()
-                            val ids = selectedUsers.toList()
+                            val ids = selectedIds.toList()
                             vm.createGroup(name, ids) { convId ->
                                 isCreating = false
                                 if (convId != null) {
@@ -228,7 +282,7 @@ fun NewChatScreen(
                             }
                         }
                     },
-                    enabled = groupName.isNotBlank() && selectedUsers.isNotEmpty() && !isCreating
+                    enabled = groupName.isNotBlank() && selectedIds.isNotEmpty() && !isCreating
                 ) {
                     if (isCreating) {
                         CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))

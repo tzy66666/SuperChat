@@ -61,6 +61,12 @@ fun ChatScreen(
     val currentUser by vm.currentUser.collectAsState()
     val context = LocalContext.current
 
+    // 会话类型：群聊才显示邀请入口（会话列表刷新后自动更新）
+    val conversations by vm.conversations.collectAsState()
+    val isGroup = remember(conversations, convId) {
+        conversations.any { it.id == convId && it.type == "group" }
+    }
+
     var inputText by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -121,9 +127,11 @@ fun ChatScreen(
                     titleContentColor = TextPrimary
                 ),
                 actions = {
-                    // 邀请加入群聊
-                    IconButton(onClick = { showInviteDialog = true }) {
-                        Icon(Icons.Filled.PersonAdd, "邀请加入")
+                    // 邀请加入群聊（仅群聊显示）
+                    if (isGroup) {
+                        IconButton(onClick = { showInviteDialog = true }) {
+                            Icon(Icons.Filled.PersonAdd, "邀请加入")
+                        }
                     }
                     if (isUploading) {
                         CircularProgressIndicator(
@@ -219,15 +227,12 @@ fun ChatScreen(
             }
         }
 
-        // 可邀请 = 通讯录 - 已在群里
-        val available = remember(contacts, existingIds) {
-            contacts?.filter { it.id !in existingIds } ?: emptyList()
-        }
-        // 本地搜索过滤（只过滤联系人，不搜全站用户）
-        val filtered = remember(available, searchQuery) {
+        // 显示全部联系人（已在群里的置灰标“已在群聊”，而不是隐藏成空列表）
+        val filtered = remember(contacts, searchQuery) {
+            val all = contacts ?: emptyList()
             val q = searchQuery.trim()
-            if (q.isEmpty()) available
-            else available.filter {
+            if (q.isEmpty()) all
+            else all.filter {
                 it.username.contains(q, true) || it.displayName.contains(q, true)
             }
         }
@@ -263,7 +268,7 @@ fun ChatScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (available.isEmpty())
+                                    text = if (contacts.isNullOrEmpty())
                                         "暂无联系人\n先去发起聊天，认识更多的人吧"
                                     else "未找到匹配的联系人",
                                     fontSize = 13.sp,
@@ -277,23 +282,28 @@ fun ChatScreen(
                                 modifier = Modifier.heightIn(max = 280.dp)
                             ) {
                                 items(filtered, key = { it.id }) { user ->
+                                    val isMember = user.id in existingIds
                                     val isSelected = user.id in selectedIds
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
-                                                selectedIds = if (isSelected) {
-                                                    selectedIds - user.id
-                                                } else {
-                                                    selectedIds + user.id
+                                            .then(
+                                                if (isMember) Modifier
+                                                else Modifier.clickable {
+                                                    selectedIds = if (isSelected) {
+                                                        selectedIds - user.id
+                                                    } else {
+                                                        selectedIds + user.id
+                                                    }
                                                 }
-                                            }
+                                            )
                                             .padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(
                                             checked = isSelected,
-                                            onCheckedChange = null
+                                            onCheckedChange = null,
+                                            enabled = !isMember
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Avatar(
@@ -302,16 +312,26 @@ fun ChatScreen(
                                             size = 36
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = user.displayName.ifBlank { user.username },
                                                 fontSize = 14.sp,
-                                                fontWeight = FontWeight.Medium
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isMember) TextPrimary.copy(alpha = 0.35f)
+                                                        else TextPrimary
                                             )
                                             Text(
                                                 text = "@${user.username}",
                                                 fontSize = 12.sp,
-                                                color = TextPrimary.copy(alpha = 0.5f)
+                                                color = if (isMember) TextPrimary.copy(alpha = 0.3f)
+                                                        else TextPrimary.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                        if (isMember) {
+                                            Text(
+                                                text = "已在群聊",
+                                                fontSize = 11.sp,
+                                                color = TextPrimary.copy(alpha = 0.35f)
                                             )
                                         }
                                     }
