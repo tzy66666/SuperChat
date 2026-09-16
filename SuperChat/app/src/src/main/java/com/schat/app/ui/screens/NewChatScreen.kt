@@ -69,9 +69,15 @@ fun NewChatScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { if (users.isNotEmpty() && !isCreating) showGroupDialog = true }
+                        onClick = {
+                            if (users.isEmpty()) {
+                                showGroupDialog = true // 打开对话框，里面会提示去搜索
+                            } else if (!isCreating) {
+                                showGroupDialog = true
+                            }
+                        }
                     ) {
-                        Icon(Icons.Filled.Group, "建群")
+                        Icon(Icons.Filled.Group, "创建群聊")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -169,7 +175,16 @@ fun NewChatScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("已选 ${selectedUsers.size} 人", fontSize = 14.sp, color = TextSecondary)
                     Spacer(modifier = Modifier.height(4.dp))
-                    LazyColumn(modifier = Modifier.height(200.dp)) {
+                    if (users.isEmpty()) {
+                        // 没搜过用户，提示去搜索
+                        Box(
+                            modifier = Modifier.height(200.dp).fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("请先搜索用户，再选择群成员", color = TextSecondary, fontSize = 14.sp)
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.height(200.dp)) {
                         items(users, key = { it.id }) { user ->
                             Row(
                                 modifier = Modifier
@@ -193,6 +208,7 @@ fun NewChatScreen(
                                 Text(" @${user.username}", fontSize = 12.sp, color = TextSecondary)
                             }
                         }
+                    }
                     }
                 }
             },
