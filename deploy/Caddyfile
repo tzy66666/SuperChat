@@ -1,0 +1,30 @@
+# Caddy 反代配置 —— 自动 HTTPS
+# 默认 HTTPS 端口 443 被 Xray REALITY 占用，Caddy 改用 8443
+# 访问地址：https://域名:8443
+# 80 端口用于 ACME 证书验证（Caddy 自动管理）
+
+{$DOMAIN}:8443 {
+	# 反代到 messenger 后端（仅监听 127.0.0.1）
+	reverse_proxy 127.0.0.1:8080
+
+	# 上传上限 64MB（与后端一致）
+	request_body {
+		max_size 64MB
+	}
+
+	# WebSocket 支持（Caddy 自动处理，无需额外配置）
+
+	# 压缩
+	encode gzip zstd
+
+	# 静态文件缓存（上传的文件）
+	@files path /files/*
+	handle @files {
+		header Cache-Control "public, max-age=86400"
+	}
+}
+
+# 80 端口仅用于 ACME HTTP-01 验证，不做反代
+{$DOMAIN}:80 {
+	respond "messenger API" 200
+}

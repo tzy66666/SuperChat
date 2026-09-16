@@ -1,0 +1,12 @@
+﻿# 临时文件
+.temp/
+*.exe
+*.apk
+*.db
+*.jks
+
+# Go
+vendor/
+
+# 编译产物
+messenger-linux-amd64

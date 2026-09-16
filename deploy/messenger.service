@@ -1,0 +1,23 @@
+[Unit]
+Description=Messenger Chat Server
+After=network.target
+
+[Service]
+Type=simple
+User=messenger
+Group=messenger
+WorkingDirectory=/opt/messenger
+ExecStart=/opt/messenger/messenger -listen 127.0.0.1:8080 -data /opt/messenger/data
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/messenger/data
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
