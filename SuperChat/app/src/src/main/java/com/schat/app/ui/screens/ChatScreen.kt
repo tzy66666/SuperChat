@@ -29,10 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.schat.app.data.Message
+import com.schat.app.data.User
 import com.schat.app.network.ApiClient
 import com.schat.app.ui.AppViewModel
 import com.schat.app.ui.theme.*
@@ -185,6 +187,7 @@ fun ChatScreen(
                 MessageBubble(
                     msg = msg,
                     isMe = msg.senderId == currentUser?.id,
+                    me = currentUser,
                     context = context,
                     downloadStates = downloadStates,
                     onDownload = { message, targetFile ->
@@ -200,24 +203,32 @@ fun ChatScreen(
         }
     }
 
-    // ---- 邀请加入群聊对话框 ----
+    // ---- 邀请加入群聊对话框（从通讯录选择） ----
     if (showInviteDialog) {
+        var contacts by remember { mutableStateOf<List<User>?>(null) } // null = 加载中
+        var existingIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
         var searchQuery by remember { mutableStateOf("") }
-        var searchResults by remember { mutableStateOf<List<com.schat.app.data.User>>(emptyList()) }
         var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
         var isInviting by remember { mutableStateOf(false) }
-        var searched by remember { mutableStateOf(false) }
 
-        LaunchedEffect(searchQuery) {
-            if (searchQuery.isNotBlank()) {
-                kotlinx.coroutines.delay(300) // 防抖
-                vm.searchUsers(searchQuery) { users ->
-                    searchResults = users.filter { it.id != currentUser?.id }
-                    searched = true
-                }
-            } else {
-                searchResults = emptyList()
-                searched = false
+        // 打开时加载：通讯录 + 当前群已有成员（用于排除已在群里的人）
+        LaunchedEffect(Unit) {
+            vm.loadContacts { list -> contacts = list }
+            vm.loadConversation(convId) { conv ->
+                existingIds = conv?.members?.map { it.userId }?.toSet() ?: emptySet()
+            }
+        }
+
+        // 可邀请 = 通讯录 - 已在群里
+        val available = remember(contacts, existingIds) {
+            contacts?.filter { it.id !in existingIds } ?: emptyList()
+        }
+        // 本地搜索过滤（只过滤联系人，不搜全站用户）
+        val filtered = remember(available, searchQuery) {
+            val q = searchQuery.trim()
+            if (q.isEmpty()) available
+            else available.filter {
+                it.username.contains(q, true) || it.displayName.contains(q, true)
             }
         }
 
@@ -229,56 +240,81 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("搜索用户名...", fontSize = 14.sp) },
+                        placeholder = { Text("搜索联系人...", fontSize = 14.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (searchResults.isEmpty() && searched) {
-                        Text(
-                            text = "未找到用户",
-                            fontSize = 13.sp,
-                            color = TextPrimary.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        )
-                    }
-
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 280.dp)
-                    ) {
-                        items(searchResults, key = { it.id }) { user ->
-                            val isSelected = selectedIds.contains(user.id)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedIds = if (isSelected) {
-                                            selectedIds - user.id
-                                        } else {
-                                            selectedIds + user.id
+                    when {
+                        contacts == null -> {
+                            // 加载中
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        filtered.isEmpty() -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(180.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (available.isEmpty())
+                                        "暂无联系人\n先去发起聊天，认识更多的人吧"
+                                    else "未找到匹配的联系人",
+                                    fontSize = 13.sp,
+                                    color = TextPrimary.copy(alpha = 0.5f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.heightIn(max = 280.dp)
+                            ) {
+                                items(filtered, key = { it.id }) { user ->
+                                    val isSelected = user.id in selectedIds
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedIds = if (isSelected) {
+                                                    selectedIds - user.id
+                                                } else {
+                                                    selectedIds + user.id
+                                                }
+                                            }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = null
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Avatar(
+                                            name = user.displayName.ifBlank { user.username },
+                                            avatarUrl = user.avatarUrl,
+                                            size = 36
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = user.displayName.ifBlank { user.username },
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = "@${user.username}",
+                                                fontSize = 12.sp,
+                                                color = TextPrimary.copy(alpha = 0.5f)
+                                            )
                                         }
                                     }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = isSelected,
-                                    onCheckedChange = null
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = user.displayName.ifBlank { user.username },
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "@${user.username}",
-                                        fontSize = 12.sp,
-                                        color = TextPrimary.copy(alpha = 0.5f)
-                                    )
                                 }
                             }
                         }
@@ -439,22 +475,35 @@ private fun openFile(context: android.content.Context, file: File) {
 private fun MessageBubble(
     msg: Message,
     isMe: Boolean,
+    me: User?,
     context: android.content.Context,
     downloadStates: MutableMap<Long, DownloadState>,
     onDownload: (Message, File) -> Unit,
     onOpen: (File) -> Unit
 ) {
-    val alignment = if (isMe) Alignment.End else Alignment.Start
     val bgColor = if (isMe) BubbleMe else BubbleOther
     val textColor = if (isMe) TextWhite else TextPrimary
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-    Column(
+    // 头像：自己取当前登录用户，对方取消息自带的 sender 信息
+    val avatarName = if (isMe) {
+        me?.let { it.displayName.ifBlank { it.username } } ?: "我"
+    } else {
+        msg.senderName
+    }
+    val avatarUrl = if (isMe) (me?.avatarUrl ?: "") else msg.senderAvatar
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalAlignment = alignment
+        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
     ) {
+        if (!isMe) {
+            Avatar(name = avatarName, avatarUrl = avatarUrl, size = 36)
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         Box(
             modifier = Modifier
                 .clip(
@@ -595,6 +644,10 @@ private fun MessageBubble(
                     }
                 }
             }
+        }
+        if (isMe) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Avatar(name = avatarName, avatarUrl = avatarUrl, size = 36)
         }
     }
 }

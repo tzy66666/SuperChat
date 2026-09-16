@@ -85,6 +85,7 @@ func routes(m *http.ServeMux) {
 	// 用户
 	m.HandleFunc("GET /api/me", withAuth(handleMe))
 	m.HandleFunc("GET /api/users", withAuth(handleListUsers))
+	m.HandleFunc("GET /api/contacts", withAuth(handleListContacts))
 	m.HandleFunc("POST /api/avatar", withAuth(handleUploadAvatar))
 	m.HandleFunc("GET /api/avatars/{rest...}", handleGetAvatar)
 	// 会话

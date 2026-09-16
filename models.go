@@ -41,6 +41,8 @@ type Message struct {
 	ID             int64  `json:"id"`
 	ConversationID int64  `json:"conversation_id"`
 	SenderID       int64  `json:"sender_id"`
+	SenderName     string `json:"sender_name"`   // 发送者昵称（客户端气泡旁头像用）
+	SenderAvatar   string `json:"sender_avatar"` // 发送者头像 URL
 	Type           string `json:"type"`
 	Content        string `json:"content"`
 	FileID         *int64 `json:"file_id,omitempty"`
@@ -175,12 +177,14 @@ func (d *DB) GetFileByStored(id int64, storedName string) (*File, error) {
 
 // ---- 消息 ----
 
-const msgCols = `id, conversation_id, sender_id, type, content, COALESCE(file_id,0), created_at`
+// 消息查询：LEFT JOIN users 带出发送者昵称和头像（用户异常删除时降级为空，不影响消息返回）
+const msgCols = `m.id, m.conversation_id, m.sender_id, m.type, m.content, COALESCE(m.file_id,0), m.created_at, COALESCE(u.display_name,''), COALESCE(u.avatar_url,'')`
+const msgJoin = ` FROM messages m LEFT JOIN users u ON u.id = m.sender_id `
 
 func scanMessage(row interface{ Scan(...any) error }) (*Message, error) {
 	var m Message
 	var fileID int64
-	if err := row.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Type, &m.Content, &fileID, &m.CreatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Type, &m.Content, &fileID, &m.CreatedAt, &m.SenderName, &m.SenderAvatar); err != nil {
 		return nil, err
 	}
 	if fileID != 0 {
@@ -190,7 +194,7 @@ func scanMessage(row interface{ Scan(...any) error }) (*Message, error) {
 }
 
 func (d *DB) GetMessageByID(id int64) (*Message, error) {
-	m, err := scanMessage(d.QueryRow(`SELECT `+msgCols+` FROM messages WHERE id=?`, id))
+	m, err := scanMessage(d.QueryRow(`SELECT `+msgCols+msgJoin+`WHERE m.id=?`, id))
 	if err != nil {
 		return nil, err
 	}
@@ -201,13 +205,13 @@ func (d *DB) GetMessageByID(id int64) (*Message, error) {
 }
 
 func (d *DB) ListMessages(convID, beforeID int64, limit int) ([]*Message, error) {
-	query := `SELECT ` + msgCols + ` FROM messages WHERE conversation_id=?`
+	query := `SELECT ` + msgCols + msgJoin + `WHERE m.conversation_id=?`
 	args := []any{convID}
 	if beforeID > 0 {
-		query += ` AND id<?`
+		query += ` AND m.id<?`
 		args = append(args, beforeID)
 	}
-	query += ` ORDER BY id DESC LIMIT ?`
+	query += ` ORDER BY m.id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := d.Query(query, args...)
@@ -255,7 +259,7 @@ func (d *DB) fillMessageFile(m *Message) error {
 }
 
 func (d *DB) MessageByIDTx(t *tx, id int64) (*Message, error) {
-	m, err := scanMessage(t.QueryRow(`SELECT `+msgCols+` FROM messages WHERE id=?`, id))
+	m, err := scanMessage(t.QueryRow(`SELECT `+msgCols+msgJoin+`WHERE m.id=?`, id))
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +282,7 @@ func (d *DB) MessagesByIDs(ids []int64) ([]*Message, error) {
 	for i, id := range ids {
 		args[i] = id
 	}
-	rows, err := d.Query(`SELECT `+msgCols+` FROM messages WHERE id IN (`+placeholders+`)`, args...)
+	rows, err := d.Query(`SELECT `+msgCols+msgJoin+`WHERE m.id IN (`+placeholders+`)`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +304,32 @@ func (d *DB) MessagesByIDs(ids []int64) ([]*Message, error) {
 		}
 	}
 	return msgs, nil
+}
+
+// ---- 通讯录 ----
+
+// Contacts 返回与指定用户共处过任意会话的其他用户（去重），供群聊拉人选择
+func (d *DB) Contacts(userID int64) ([]*User, error) {
+	rows, err := d.Query(`
+		SELECT DISTINCT u.id, u.username, u.password_hash, u.display_name, u.avatar_url, u.created_at
+		FROM conversation_members mine
+		JOIN conversation_members other ON other.conversation_id = mine.conversation_id
+		JOIN users u ON u.id = other.user_id
+		WHERE mine.user_id = ? AND u.id <> ?
+		ORDER BY u.id`, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
 
 // ---- 会话 ----

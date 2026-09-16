@@ -47,6 +47,8 @@ data class Message(
     val id: Long,
     @SerializedName("conversation_id") val conversationId: Long,
     @SerializedName("sender_id") val senderId: Long,
+    @SerializedName("sender_name") val senderName: String = "",   // 发送者昵称（气泡旁头像用）
+    @SerializedName("sender_avatar") val senderAvatar: String = "", // 发送者头像 URL
     val type: String, // "text" | "image" | "file"
     val content: String = "",
     @SerializedName("file_id") val fileId: Long? = null,

@@ -500,6 +500,19 @@ func handleAddMembers(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, http.StatusOK, conv)
 }
 
+// ---- 通讯录 ----
+
+// handleListContacts 返回与我共处过任意会话的所有用户（群聊拉人时的候选列表）
+func handleListContacts(w http.ResponseWriter, r *http.Request) {
+	me := currentUser(r)
+	users, err := db.Contacts(me.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "加载联系人失败")
+		return
+	}
+	writeOK(w, http.StatusOK, users)
+}
+
 // ---- 退群 ----
 
 func handleLeaveConversation(w http.ResponseWriter, r *http.Request) {

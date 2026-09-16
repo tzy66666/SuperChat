@@ -22,6 +22,14 @@ interface ApiService {
     @GET("users")
     suspend fun searchUsers(@Query("q") query: String): ApiResponse<List<User>>
 
+    // 通讯录：与我共处过任意会话的所有用户（群聊拉人候选）
+    @GET("contacts")
+    suspend fun getContacts(): ApiResponse<List<User>>
+
+    // 会话详情（含完整成员列表）
+    @GET("conversations/{id}")
+    suspend fun getConversation(@Path("id") id: Long): ApiResponse<Conversation>
+
     @Multipart
     @POST("avatar")
     suspend fun uploadAvatar(@Part file: MultipartBody.Part): ApiResponse<User>

@@ -377,20 +377,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ============================================================
-    // 群聊邀请成员
+    // 群聊邀请成员（通讯录多选）
     // ============================================================
 
-    /** 搜索用户（供邀请加入群聊用） */
-    suspend fun searchUsers(query: String, onResult: (List<com.schat.app.data.User>) -> Unit) {
-        try {
-            val resp = ApiClient.api.searchUsers(query)
-            if (resp.ok && resp.data != null) {
-                onResult(resp.data)
-            } else {
+    /** 加载通讯录：与我共处过任意会话的所有用户 */
+    fun loadContacts(onResult: (List<User>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = ApiClient.api.getContacts()
+                if (resp.ok && resp.data != null) {
+                    onResult(resp.data)
+                } else {
+                    onResult(emptyList())
+                }
+            } catch (e: Exception) {
                 onResult(emptyList())
             }
-        } catch (e: Exception) {
-            onResult(emptyList())
+        }
+    }
+
+    /** 加载会话详情（含完整成员列表，用于排除已在群里的成员） */
+    fun loadConversation(convId: Long, onResult: (Conversation?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = ApiClient.api.getConversation(convId)
+                if (resp.ok && resp.data != null) {
+                    onResult(resp.data)
+                } else {
+                    onResult(null)
+                }
+            } catch (e: Exception) {
+                onResult(null)
+            }
         }
     }
 
