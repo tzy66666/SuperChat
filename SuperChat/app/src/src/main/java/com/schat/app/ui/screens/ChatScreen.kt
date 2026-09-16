@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -65,6 +66,9 @@ fun ChatScreen(
 
     // 每条文件消息的下载状态：messageId -> DownloadState
     val downloadStates = remember { mutableStateMapOf<Long, DownloadState>() }
+
+    // 邀请加入群聊对话框状态
+    var showInviteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -115,6 +119,10 @@ fun ChatScreen(
                     titleContentColor = TextPrimary
                 ),
                 actions = {
+                    // 邀请加入群聊
+                    IconButton(onClick = { showInviteDialog = true }) {
+                        Icon(Icons.Filled.PersonAdd, "邀请加入")
+                    }
                     if (isUploading) {
                         CircularProgressIndicator(
                             strokeWidth = 2.dp,
@@ -190,6 +198,127 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    // ---- 邀请加入群聊对话框 ----
+    if (showInviteDialog) {
+        var searchQuery by remember { mutableStateOf("") }
+        var searchResults by remember { mutableStateOf<List<com.schat.app.data.User>>(emptyList()) }
+        var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+        var isInviting by remember { mutableStateOf(false) }
+        var searched by remember { mutableStateOf(false) }
+
+        LaunchedEffect(searchQuery) {
+            if (searchQuery.isNotBlank()) {
+                kotlinx.coroutines.delay(300) // 防抖
+                vm.searchUsers(searchQuery) { users ->
+                    searchResults = users.filter { it.id != currentUser?.id }
+                    searched = true
+                }
+            } else {
+                searchResults = emptyList()
+                searched = false
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { if (!isInviting) showInviteDialog = false },
+            title = { Text("邀请加入群聊", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("搜索用户名...", fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (searchResults.isEmpty() && searched) {
+                        Text(
+                            text = "未找到用户",
+                            fontSize = 13.sp,
+                            color = TextPrimary.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 280.dp)
+                    ) {
+                        items(searchResults, key = { it.id }) { user ->
+                            val isSelected = selectedIds.contains(user.id)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedIds = if (isSelected) {
+                                            selectedIds - user.id
+                                        } else {
+                                            selectedIds + user.id
+                                        }
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isSelected,
+                                    onCheckedChange = null
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = user.displayName.ifBlank { user.username },
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "@${user.username}",
+                                        fontSize = 12.sp,
+                                        color = TextPrimary.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (selectedIds.isNotEmpty()) {
+                            isInviting = true
+                            vm.inviteMembers(convId, selectedIds.toList()) { success ->
+                                isInviting = false
+                                if (success) {
+                                    showInviteDialog = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = selectedIds.isNotEmpty() && !isInviting
+                ) {
+                    if (isInviting) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Text("邀请 (${selectedIds.size})")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showInviteDialog = false },
+                    enabled = !isInviting
+                ) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

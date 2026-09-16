@@ -43,6 +43,12 @@ interface ApiService {
     @POST("conversations/{id}/read")
     suspend fun markRead(@Path("id") id: Long): ApiResponse<Map<String, Any>>
 
+    @POST("conversations/{id}/members")
+    suspend fun addMembers(
+        @Path("id") id: Long,
+        @Body body: AddMembersRequest
+    ): ApiResponse<Conversation>
+
     @DELETE("conversations/{id}/members/me")
     suspend fun leaveConversation(@Path("id") id: Long): ApiResponse<Map<String, Any>>
 

@@ -375,4 +375,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ============================================================
+    // 群聊邀请成员
+    // ============================================================
+
+    /** 搜索用户（供邀请加入群聊用） */
+    suspend fun searchUsers(query: String, onResult: (List<com.schat.app.data.User>) -> Unit) {
+        try {
+            val resp = ApiClient.api.searchUsers(query)
+            if (resp.ok && resp.data != null) {
+                onResult(resp.data)
+            } else {
+                onResult(emptyList())
+            }
+        } catch (e: Exception) {
+            onResult(emptyList())
+        }
+    }
+
+    /** 群聊批量拉人 */
+    fun inviteMembers(convId: Long, userIds: List<Long>, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val resp = ApiClient.api.addMembers(convId, com.schat.app.data.AddMembersRequest(userIds))
+                if (resp.ok) {
+                    loadConversations()
+                    onResult(true)
+                } else {
+                    _error.tryEmit(resp.error ?: "邀请失败")
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                _error.tryEmit(ApiClient.parseError(e))
+                onResult(false)
+            }
+        }
+    }
 }
