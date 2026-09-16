@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperChat 管理后台</title>
+<style>
+  :root {
+    --bg: #f4f5f9;
+    --card: #ffffff;
+    --text: #1a2233;
+    --text2: #6b7280;
+    --line: #e8eaf0;
+    --blue: #3b6ef5;
+    --blue-bg: #eef3fe;
+    --purple: #8b5cf6;
+    --purple-bg: #f3eefe;
+    --green: #16a34a;
+    --green-bg: #e9f9ef;
+    --red: #e5484d;
+    --red-bg: #fdeeee;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* ---- 登录 ---- */
+  #login {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #3b6ef5 0%, #8b5cf6 100%); z-index: 100;
+  }
+  .login-card {
+    background: #fff; border-radius: 20px; padding: 42px 40px; width: 360px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25); text-align: center;
+  }
+  .login-logo {
+    width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 16px;
+    background: linear-gradient(135deg, #3b6ef5, #8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; color: #fff; font-weight: 700;
+  }
+  .login-card h1 { font-size: 20px; margin-bottom: 6px; }
+  .login-card p { color: var(--text2); font-size: 13px; margin-bottom: 26px; }
+  .login-card input {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 15px; outline: none; margin-bottom: 14px;
+  }
+  .login-card input:focus { border-color: var(--blue); }
+  .login-btn {
+    width: 100%; padding: 12px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #3b6ef5, #8b5cf6); color: #fff; font-size: 15px; font-weight: 600;
+  }
+  .login-btn:disabled { opacity: .6; }
+  .login-err { color: var(--red); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+
+  /* ---- 主界面 ---- */
+  #app { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, #3b6ef5, #8b5cf6);
+    display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 19px;
+  }
+  .brand h1 { font-size: 18px; }
+  .brand small { display: block; color: var(--text2); font-size: 12px; font-weight: normal; }
+  .head-actions { display: flex; gap: 10px; }
+  .btn {
+    padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); font-size: 13px; color: var(--text);
+  }
+  .btn:hover { border-color: var(--blue); color: var(--blue); }
+
+  nav { display: flex; gap: 6px; margin-bottom: 22px; }
+  .tab {
+    padding: 10px 22px; border-radius: 10px; border: none; background: transparent;
+    font-size: 14px; color: var(--text2); font-weight: 500;
+  }
+  .tab.active { background: var(--card); color: var(--blue); box-shadow: 0 2px 8px rgba(30,60,150,.08); font-weight: 600; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---- 概览 ---- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+  .stat-card .label { color: var(--text2); font-size: 13px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; }
+  .stat-card .value small { font-size: 13px; font-weight: normal; color: var(--text2); margin-left: 2px; }
+  .stat-card.blue { background: var(--blue-bg); } .stat-card.blue .value { color: var(--blue); }
+  .stat-card.purple { background: var(--purple-bg); } .stat-card.purple .value { color: var(--purple); }
+  .stat-card.green { background: var(--green-bg); } .stat-card.green .value { color: var(--green); }
+
+  .sys-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .sys-card { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+  .sys-card h3 { font-size: 14px; margin-bottom: 16px; color: var(--text2); font-weight: 600; }
+  .sys-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .sys-row:last-child { border-bottom: none; }
+  .sys-row .k { color: var(--text2); }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #3b6ef5, #8b5cf6); border-radius: 4px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge.ok { background: var(--green-bg); color: var(--green); }
+  .badge.bad { background: var(--red-bg); color: var(--red); }
+  .badge.unk { background: var(--line); color: var(--text2); }
+
+  /* ---- 表格 ---- */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,.05); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 13px 16px; color: var(--text2); font-weight: 600; background: #fafbfe; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8f9fd; }
+  .empty { text-align: center; color: var(--text2); padding: 48px 0; font-size: 13px; }
+
+  .uavatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
+  .uavatar-fallback {
+    width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 14px; font-weight: 600;
+    background: linear-gradient(135deg, #3b6ef5, #8b5cf6); vertical-align: middle;
+  }
+  .uname { font-weight: 600; }
+  .usub { color: var(--text2); font-size: 12px; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .tag.group { background: var(--purple-bg); color: var(--purple); }
+  .tag.direct { background: var(--blue-bg); color: var(--blue); }
+  .tag.text { background: var(--blue-bg); color: var(--blue); }
+  .tag.image { background: var(--green-bg); color: var(--green); }
+  .tag.file { background: #fff4e5; color: #d97706; }
+
+  .op-del {
+    padding: 6px 14px; border-radius: 8px; border: 1px solid #f5c6c8;
+    background: #fff; color: var(--red); font-size: 12px; font-weight: 500;
+  }
+  .op-del:hover { background: var(--red-bg); }
+  .op-view {
+    padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--blue); font-size: 12px; font-weight: 500; margin-right: 8px;
+  }
+  .op-view:hover { background: var(--blue-bg); }
+
+  /* ---- 消息弹层 ---- */
+  #modal-mask {
+    position: fixed; inset: 0; background: rgba(15,20,40,.45); z-index: 50;
+    display: none; align-items: center; justify-content: center;
+  }
+  #modal-mask.show { display: flex; }
+  #modal {
+    background: #fff; border-radius: 16px; width: 620px; max-width: 92vw; max-height: 78vh;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .modal-head b { font-size: 15px; }
+  .modal-close { border: none; background: none; font-size: 20px; color: var(--text2); padding: 4px 8px; }
+  .modal-body { overflow-y: auto; padding: 8px 20px 16px; }
+  .msg-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .msg-item:last-child { border-bottom: none; }
+  .msg-meta { min-width: 0; flex: 1; }
+  .msg-meta .line1 { display: flex; gap: 8px; align-items: center; margin-bottom: 3px; }
+  .msg-meta .line1 b { font-size: 13px; }
+  .msg-meta .time { color: var(--text2); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .msg-content { font-size: 13px; line-height: 1.5; word-break: break-all; white-space: pre-wrap; }
+  .msg-file { color: var(--text2); font-size: 12px; margin-top: 2px; }
+
+  /* ---- toast ---- */
+  #toast {
+    position: fixed; top: 26px; left: 50%; transform: translateX(-50%);
+    background: #2d3446; color: #fff; padding: 11px 22px; border-radius: 10px;
+    font-size: 13px; z-index: 200; display: none; box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  }
+  #toast.err { background: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div id="login">
+  <div class="login-card">
+    <div class="login-logo">S</div>
+    <h1>SuperChat 管理后台</h1>
+    <p>服务端数据，一目了然</p>
+    <input id="pwd" type="password" placeholder="请输入管理密码" autofocus>
+    <div class="login-err" id="login-err"></div>
+    <button class="login-btn" id="login-btn">登 录</button>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="app" style="display:none">
+  <header>
+    <div class="brand">
+      <div class="brand-logo">S</div>
+      <div>
+        <h1>SuperChat 管理后台</h1>
+        <small>服务端数据 · 本地隧道安全访问</small>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button class="btn" onclick="refreshCurrent()">刷新</button>
+      <button class="btn" onclick="logout()">退出登录</button>
+    </div>
+  </header>
+
+  <nav>
+    <button class="tab active" data-tab="overview" onclick="switchTab('overview')">概览</button>
+    <button class="tab" data-tab="users" onclick="switchTab('users')">用户</button>
+    <button class="tab" data-tab="convs" onclick="switchTab('convs')">会话</button>
+    <button class="tab" data-tab="files" onclick="switchTab('files')">文件</button>
+  </nav>
+
+  <!-- 概览 -->
+  <section class="panel active" id="panel-overview">
+    <div class="stats">
+      <div class="stat-card"><div class="label">用户数</div><div class="value" id="ov-users">—</div></div>
+      <div class="stat-card blue"><div class="label">会话数</div><div class="value" id="ov-convs">—</div></div>
+      <div class="stat-card purple"><div class="label">消息数</div><div class="value" id="ov-msgs">—</div></div>
+      <div class="stat-card green"><div class="label">文件占用</div><div class="value" id="ov-uploads">—</div></div>
+    </div>
+    <div class="sys-grid">
+      <div class="sys-card">
+        <h3>服务器状态</h3>
+        <div class="sys-row"><span class="k">messenger 服务</span><span id="ov-messenger">—</span></div>
+        <div class="sys-row"><span class="k">管理后台服务</span><span id="ov-admin">—</span></div>
+        <div class="sys-row"><span class="k">后台运行时长</span><span id="ov-uptime">—</span></div>
+        <div class="sys-row"><span class="k">内存</span><span id="ov-mem-text">—</span></div>
+        <div class="bar"><i id="ov-mem-bar" style="width:0%"></i></div>
+        <div class="sys-row" style="border:none;margin-top:6px"><span class="k">磁盘 /</span><span id="ov-disk-text">—</span></div>
+        <div class="bar"><i id="ov-disk-bar" style="width:0%"></i></div>
+      </div>
+      <div class="sys-card">
+        <h3>数据概要</h3>
+        <div class="sys-row"><span class="k">数据库文件记录</span><span id="ov-files">—</span></div>
+        <div class="sys-row"><span class="k">文件总大小（记录）</span><span id="ov-files-size">—</span></div>
+        <div class="sys-row"><span class="k">uploads 目录大小</span><span id="ov-uploads2">—</span></div>
+        <div class="sys-row"><span class="k">messenger 对外地址</span><span id="ov-upstream">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 用户 -->
+  <section class="panel" id="panel-users">
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th style="width:56px">ID</th><th style="width:56px">头像</th><th>用户</th>
+          <th>会话数</th><th>发消息数</th><th>注册时间</th><th style="width:90px">操作</th>
+        </tr></thead>
+        <tbody id="users-body"></tbody>
+      </table>
+      <div class="empty" id="users-empty" style="display:none">暂无用户</div>
+    </div>
+  </section>
+
+  <!-- 会话 -->
+  <section class="panel" id="panel-convs">
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th style="width:56px">ID</th><th style="width:64px">类型</th><th>名称 / 成员</th>
+          <th>成员数</th><th>消息数</th><th>最后活跃</th><th style="width:150px">操作</th>
+        </tr></thead>
+        <tbody id="convs-body"></tbody>
+      </table>
+      <div class="empty" id="convs-empty" style="display:none">暂无会话</div>
+    </div>
+  </section>
+
+  <!-- 文件 -->
+  <section class="panel" id="panel-files">
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th style="width:56px">ID</th><th>文件名</th><th>类型</th><th>大小</th>
+          <th>上传者</th><th>时间</th><th style="width:90px">操作</th>
+        </tr></thead>
+        <tbody id="files-body"></tbody>
+      </table>
+      <div class="empty" id="files-empty" style="display:none">暂无文件</div>
+    </div>
+  </section>
+</div>
+
+<!-- 消息弹层 -->
+<div id="modal-mask" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div class="modal-head">
+      <b id="modal-title">消息记录</b>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let token = localStorage.getItem('admin_token') || '';
+let currentTab = 'overview';
+let upstream = '';
+
+// ---- 基础 ----
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtBytes(b) {
+  if (!b && b !== 0) return '—';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+function fmtTime(ms) { return ms ? new Date(ms).toLocaleString('zh-CN', {hour12:false}) : '—'; }
+function fmtDur(sec) {
+  if (sec < 60) return sec + ' 秒';
+  if (sec < 3600) return Math.floor(sec/60) + ' 分钟';
+  if (sec < 86400) return Math.floor(sec/3600) + ' 小时 ' + Math.floor(sec%3600/60) + ' 分';
+  return Math.floor(sec/86400) + ' 天 ' + Math.floor(sec%86400/3600) + ' 小时';
+}
+let toastTimer;
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err' : '';
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.display = 'none', 2600);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', ...(opts && opts.headers || {}) }
+  });
+  if (res.status === 401) { showLogin(); throw new Error('登录已过期'); }
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || '请求失败');
+  return data.data;
+}
+
+// ---- 登录 ----
+function showLogin() {
+  $('login').style.display = 'flex';
+  $('app').style.display = 'none';
+  localStorage.removeItem('admin_token');
+  token = '';
+  $('pwd').focus();
+}
+function hideLogin() {
+  $('login').style.display = 'none';
+  $('app').style.display = 'block';
+}
+async function doLogin() {
+  const pwd = $('pwd').value;
+  if (!pwd) return;
+  $('login-btn').disabled = true;
+  $('login-err').textContent = '';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      token = data.data.token;
+      localStorage.setItem('admin_token', token);
+      hideLogin();
+      switchTab('overview');
+    } else {
+      $('login-err').textContent = data.error || '登录失败';
+    }
+  } catch (e) {
+    $('login-err').textContent = '网络错误，请确认 SSH 隧道已连接';
+  }
+  $('login-btn').disabled = false;
+}
+function logout() {
+  showLogin();
+  toast('已退出登录');
+}
+$('login-btn').onclick = doLogin;
+$('pwd').onkeydown = e => { if (e.key === 'Enter') doLogin(); };
+
+// ---- Tab ----
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  $('panel-' + (tab === 'convs' ? 'convs' : tab)).classList.add('active');
+  refreshCurrent();
+}
+function refreshCurrent() {
+  ({ overview: loadOverview, users: loadUsers, convs: loadConvs, files: loadFiles })[currentTab]();
+}
+
+// ---- 概览 ----
+async function loadOverview() {
+  try {
+    const d = await api('/api/overview');
+    upstream = d.upstream || '';
+    $('ov-users').textContent = d.stats.users;
+    $('ov-convs').textContent = d.stats.conversations;
+    $('ov-msgs').textContent = d.stats.messages;
+    $('ov-uploads').textContent = fmtBytes(d.stats.uploads_size);
+    $('ov-files').textContent = d.stats.files + ' 条';
+    $('ov-files-size').textContent = fmtBytes(d.stats.files_size);
+    $('ov-uploads2').textContent = fmtBytes(d.stats.uploads_size);
+    $('ov-upstream').textContent = d.upstream || '未配置';
+
+    const svcBadge = s => s === 'active'
+      ? '<span class="badge ok">运行中</span>'
+      : s === 'unknown' ? '<span class="badge unk">未知</span>'
+      : '<span class="badge bad">' + (s === 'inactive' ? '已停止' : esc(s)) + '</span>';
+    $('ov-messenger').innerHTML = svcBadge(d.messenger_active);
+    $('ov-admin').innerHTML = svcBadge(d.admin_active);
+    $('ov-uptime').textContent = fmtDur(d.admin_uptime);
+
+    if (d.mem_total > 0) {
+      const mp = Math.round(d.mem_used / d.mem_total * 100);
+      $('ov-mem-text').textContent = fmtBytes(d.mem_used) + ' / ' + fmtBytes(d.mem_total) + '（' + mp + '%）';
+      $('ov-mem-bar').style.width = mp + '%';
+    } else {
+      $('ov-mem-text').textContent = '—'; $('ov-mem-bar').style.width = '0%';
+    }
+    if (d.disk_total > 0) {
+      const dp = Math.round(d.disk_used / d.disk_total * 100);
+      $('ov-disk-text').textContent = fmtBytes(d.disk_used) + ' / ' + fmtBytes(d.disk_total) + '（' + dp + '%）';
+      $('ov-disk-bar').style.width = dp + '%';
+    } else {
+      $('ov-disk-text').textContent = '—'; $('ov-disk-bar').style.width = '0%';
+    }
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---- 用户 ----
+function avatarCell(u) {
+  if (u.avatar_url && upstream) {
+    const url = upstream + u.avatar_url;
+    const letter = (u.display_name || u.username || 'U').charAt(0).toUpperCase();
+    return '<img class="uavatar" src="' + esc(url) + '" onerror="this.outerHTML=\'<span class=&quot;uavatar-fallback&quot;>' + esc(letter) + '</span>\'">';
+  }
+  const letter = (u.display_name || u.username || 'U').charAt(0).toUpperCase();
+  return '<span class="uavatar-fallback">' + esc(letter) + '</span>';
+}
+async function loadUsers() {
+  try {
+    const users = await api('/api/users');
+    const body = $('users-body');
+    body.innerHTML = users.map(u =>
+      '<tr>' +
+      '<td>' + u.id + '</td>' +
+      '<td>' + avatarCell(u) + '</td>' +
+      '<td><div class="uname">' + esc(u.display_name || u.username) + '</div><div class="usub">@' + esc(u.username) + '</div></td>' +
+      '<td>' + u.conv_count + '</td>' +
+      '<td>' + u.msg_count + '</td>' +
+      '<td>' + fmtTime(u.created_at) + '</td>' +
+      '<td><button class="op-del" onclick="delUser(' + u.id + ',\'' + esc(u.display_name || u.username).replace(/'/g, "\\'") + '\')">删除</button></td>' +
+      '</tr>'
+    ).join('');
+    $('users-empty').style.display = users.length ? 'none' : 'block';
+  } catch (e) { toast(e.message, true); }
+}
+async function delUser(id, name) {
+  if (!confirm('确定删除用户「' + name + '」？\n\n其发送的所有消息、参与的单聊会话（会整体删除）、群聊成员身份、上传的文件和头像都会一并清除，不可恢复。')) return;
+  try {
+    await api('/api/users/' + id, { method: 'DELETE' });
+    toast('已删除用户「' + name + '」');
+    loadUsers();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---- 会话 ----
+async function loadConvs() {
+  try {
+    const convs = await api('/api/conversations');
+    const body = $('convs-body');
+    body.innerHTML = convs.map(c => {
+      const name = c.type === 'group' ? (c.name || '未命名群聊') : (c.members_text || '单聊');
+      return '<tr>' +
+        '<td>' + c.id + '</td>' +
+        '<td><span class="tag ' + c.type + '">' + (c.type === 'group' ? '群聊' : '单聊') + '</span></td>' +
+        '<td><div class="uname">' + esc(name) + '</div><div class="usub">' + esc(c.members_text || '') + '</div></td>' +
+        '<td>' + c.member_count + '</td>' +
+        '<td>' + c.msg_count + '</td>' +
+        '<td>' + fmtTime(c.last_active_at) + '</td>' +
+        '<td>' +
+          '<button class="op-view" onclick="viewMsgs(' + c.id + ',\'' + esc(name).replace(/'/g, "\\'") + '\')">消息</button>' +
+          '<button class="op-del" onclick="delConv(' + c.id + ',\'' + esc(name).replace(/'/g, "\\'") + '\')">删除</button>' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+    $('convs-empty').style.display = convs.length ? 'none' : 'block';
+  } catch (e) { toast(e.message, true); }
+}
+async function delConv(id, name) {
+  if (!confirm('确定删除会话「' + name + '」？\n\n会话内所有消息和成员关系都会一并清除，不可恢复。')) return;
+  try {
+    await api('/api/conversations/' + id, { method: 'DELETE' });
+    toast('已删除会话「' + name + '」');
+    loadConvs();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---- 消息弹层 ----
+async function viewMsgs(convId, name) {
+  try {
+    const msgs = await api('/api/conversations/' + convId + '/messages');
+    $('modal-title').textContent = '「' + name + '」的消息记录（最新 500 条）';
+    const body = $('modal-body');
+    if (!msgs.length) {
+      body.innerHTML = '<div class="empty">该会话暂无消息</div>';
+    } else {
+      body.innerHTML = msgs.map(m => {
+        const typeTag = '<span class="tag ' + m.type + '">' + ({text:'文字', image:'图片', file:'文件'}[m.type] || m.type) + '</span>';
+        const fileLine = (m.type === 'image' || m.type === 'file') && m.file_name
+          ? '<div class="msg-file">附件：' + esc(m.file_name) + '（' + fmtBytes(m.file_size) + '）</div>' : '';
+        return '<div class="msg-item">' +
+          '<div class="msg-meta">' +
+            '<div class="line1"><b>' + esc(m.sender_name) + '</b>' + typeTag + '<span class="time">' + fmtTime(m.created_at) + '</span></div>' +
+            '<div class="msg-content">' + esc(m.content || '') + '</div>' + fileLine +
+          '</div></div>';
+      }).join('');
+    }
+    $('modal-mask').classList.add('show');
+  } catch (e) { toast(e.message, true); }
+}
+function closeModal() { $('modal-mask').classList.remove('show'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ---- 文件 ----
+async function loadFiles() {
+  try {
+    const files = await api('/api/files');
+    const body = $('files-body');
+    body.innerHTML = files.map(f =>
+      '<tr>' +
+      '<td>' + f.id + '</td>' +
+      '<td class="uname">' + esc(f.orig_name) + '<div class="usub" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.stored_name) + '</div></td>' +
+      '<td>' + esc(f.mime) + '</td>' +
+      '<td>' + fmtBytes(f.size) + '</td>' +
+      '<td>' + esc(f.uploader_name) + '</td>' +
+      '<td>' + fmtTime(f.created_at) + '</td>' +
+      '<td><button class="op-del" onclick="delFile(' + f.id + ',\'' + esc(f.orig_name).replace(/'/g, "\\'") + '\')">删除</button></td>' +
+      '</tr>'
+    ).join('');
+    $('files-empty').style.display = files.length ? 'none' : 'block';
+  } catch (e) { toast(e.message, true); }
+}
+async function delFile(id, name) {
+  if (!confirm('确定删除文件「' + name + '」？服务器磁盘上的文件会一并删除，不可恢复。')) return;
+  try {
+    await api('/api/files/' + id, { method: 'DELETE' });
+    toast('已删除文件');
+    loadFiles();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---- 启动 ----
+(async function init() {
+  if (!token) return; // 显示登录页
+  try {
+    await api('/api/overview'); // 校验 token
+    hideLogin();
+    switchTab('overview');
+  } catch (e) { /* 401 已触发 showLogin */ }
+})();
+</script>
+</body>
+</html>
