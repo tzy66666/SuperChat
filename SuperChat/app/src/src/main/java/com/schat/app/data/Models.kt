@@ -56,6 +56,19 @@ data class Message(
     @SerializedName("created_at") val createdAt: Long
 )
 
+// ---- 本地待发送消息（乐观 UI：发送中/失败重试，纯本地状态，不上传服务端） ----
+data class PendingMsg(
+    val tempId: Long,      // 本地负数递增 ID
+    val content: String,
+    val createdAt: Long,
+    val status: Int        // PendingStatus.SENDING / FAILED
+)
+
+object PendingStatus {
+    const val SENDING = 0  // 发送中：气泡旁小转圈
+    const val FAILED = 1   // 发送失败：红色感叹号，点击气泡重试
+}
+
 data class FileInfo(
     val id: Long,
     val name: String,

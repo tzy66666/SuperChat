@@ -151,6 +151,9 @@ func (d *DB) SearchUsers(q string, excludeID int64) ([]*User, error) {
 		}
 		users = append(users, u)
 	}
+	if users == nil {
+		users = []*User{} // 空结果统一返回 []，不返回 null（与其他列表接口一致）
+	}
 	return users, rows.Err()
 }
 
@@ -328,6 +331,9 @@ func (d *DB) Contacts(userID int64) ([]*User, error) {
 			return nil, err
 		}
 		users = append(users, u)
+	}
+	if users == nil {
+		users = []*User{} // 空结果统一返回 []，不返回 null（与其他列表接口一致）
 	}
 	return users, rows.Err()
 }

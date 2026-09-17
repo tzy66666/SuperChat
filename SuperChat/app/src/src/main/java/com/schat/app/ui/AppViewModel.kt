@@ -37,6 +37,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
 
+    // 本地待发送消息（乐观 UI）：发送中/失败重试，发送成功后由服务端消息顶替
+    private val _pendingMsgs = MutableStateFlow<List<PendingMsg>>(emptyList())
+    val pendingMsgs: StateFlow<List<PendingMsg>> = _pendingMsgs
+    private var tempMsgId = -1L
+
     private val _currentConvId = MutableStateFlow(0L)
     val currentConvId: StateFlow<Long> = _currentConvId
 
@@ -174,6 +179,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _currentUser.value = null
             _conversations.value = emptyList()
             _messages.value = emptyList()
+            _pendingMsgs.value = emptyList()
             _currentConvId.value = 0
             _currentConvName.value = ""
         }
@@ -244,6 +250,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _currentConvId.value = convId
         _currentConvName.value = name
         _messages.value = emptyList()
+        _pendingMsgs.value = emptyList() // 换会话时丢弃上一会话的未发送消息
         viewModelScope.launch {
             try {
                 val resp = ApiClient.api.getMessages(convId)
@@ -295,23 +302,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** 发送文字消息。HTTP 响应和 WS 推送都走 addMessageDedup 去重 */
+    /** 发送文字消息（乐观 UI）：立即插入「发送中」气泡，成功后由服务端消息顶替，失败可重试 */
     fun sendTextMessage(content: String) {
         val convId = _currentConvId.value
         if (convId == 0L || content.isBlank()) return
+        val pending = PendingMsg(tempMsgId--, content, System.currentTimeMillis(), PendingStatus.SENDING)
+        _pendingMsgs.update { it + pending }
+        dispatchText(pending)
+    }
+
+    /** 重试失败的待发送消息 */
+    fun retryPendingMsg(tempId: Long) {
+        val target = _pendingMsgs.value.find { it.tempId == tempId } ?: return
+        if (target.status != PendingStatus.FAILED) return
+        _pendingMsgs.update { list ->
+            list.map { if (it.tempId == tempId) it.copy(status = PendingStatus.SENDING) else it }
+        }
+        dispatchText(target)
+    }
+
+    /** 实际发送逻辑，成功移除待发送项，失败标记可重试 */
+    private fun dispatchText(pending: PendingMsg) {
+        val convId = _currentConvId.value
+        if (convId == 0L) return
         viewModelScope.launch {
             try {
                 val resp = ApiClient.api.sendMessage(
-                    SendMessageRequest(conversationId = convId, content = content)
+                    SendMessageRequest(conversationId = convId, content = pending.content)
                 )
                 if (resp.ok && resp.data != null) {
                     addMessageDedup(resp.data)
+                    _pendingMsgs.update { list -> list.filterNot { it.tempId == pending.tempId } }
                 } else {
-                    _error.tryEmit(resp.error ?: "发送失败")
+                    failPending(pending.tempId)
+                    _error.tryEmit("发送失败，点击红色消息可重试")
                 }
             } catch (e: Exception) {
-                _error.tryEmit(ApiClient.parseError(e))
+                failPending(pending.tempId)
+                _error.tryEmit("发送失败，点击红色消息可重试")
             }
+        }
+    }
+
+    private fun failPending(tempId: Long) {
+        _pendingMsgs.update { list ->
+            list.map { if (it.tempId == tempId) it.copy(status = PendingStatus.FAILED) else it }
         }
     }
 

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PersonAdd
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.schat.app.data.Message
+import com.schat.app.data.PendingMsg
+import com.schat.app.data.PendingStatus
 import com.schat.app.data.User
 import com.schat.app.network.ApiClient
 import com.schat.app.ui.AppViewModel
@@ -58,6 +61,7 @@ fun ChatScreen(
     onBack: () -> Unit
 ) {
     val messages by vm.messages.collectAsState()
+    val pendingMsgs by vm.pendingMsgs.collectAsState()
     val currentUser by vm.currentUser.collectAsState()
     val context = LocalContext.current
 
@@ -78,9 +82,10 @@ fun ChatScreen(
     // 邀请加入群聊对话框状态
     var showInviteDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(messages.size, pendingMsgs.size) {
+        val total = messages.size + pendingMsgs.size
+        if (total > 0) {
+            listState.animateScrollToItem(total - 1)
         }
     }
 
@@ -206,6 +211,14 @@ fun ChatScreen(
                     onOpen = { file ->
                         openFile(context, file)
                     }
+                )
+            }
+            // 本地待发送消息（发送中/失败）：渲染在最后
+            items(pendingMsgs, key = { it.tempId }) { pending ->
+                PendingBubble(
+                    pending = pending,
+                    me = currentUser,
+                    onRetry = { vm.retryPendingMsg(pending.tempId) }
                 )
             }
         }
@@ -669,6 +682,75 @@ private fun MessageBubble(
             Spacer(modifier = Modifier.width(8.dp))
             Avatar(name = avatarName, avatarUrl = avatarUrl, size = 36)
         }
+    }
+}
+
+// ---- 本地待发送气泡（乐观 UI） ----
+@Composable
+private fun PendingBubble(
+    pending: PendingMsg,
+    me: User?,
+    onRetry: () -> Unit
+) {
+    val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val isFailed = pending.status == PendingStatus.FAILED
+    val avatarName = me?.let { it.displayName.ifBlank { it.username } } ?: "我"
+    val avatarUrl = me?.avatarUrl ?: ""
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .then(
+                if (isFailed) Modifier.clickable(onClick = onRetry) else Modifier
+            ),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 状态指示：发送中转圈 / 失败红色感叹号
+        when {
+            isFailed -> {
+                Icon(
+                    Icons.Filled.Error,
+                    contentDescription = "发送失败，点击重试",
+                    tint = UnreadRed,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            else -> {
+                CircularProgressIndicator(
+                    strokeWidth = 1.5.dp,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 16.dp, topEnd = 16.dp,
+                        bottomStart = 16.dp, bottomEnd = 4.dp
+                    )
+                )
+                .background(if (isFailed) BubbleOther else BubbleMe)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .widthIn(max = 280.dp)
+        ) {
+            val textColor = if (isFailed) TextPrimary.copy(alpha = 0.6f) else TextWhite
+            Column {
+                Text(text = pending.content, color = textColor, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = timeFmt.format(Date(pending.createdAt)),
+                    color = textColor.copy(alpha = 0.5f),
+                    fontSize = 10.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Avatar(name = avatarName, avatarUrl = avatarUrl, size = 36)
     }
 }
 
