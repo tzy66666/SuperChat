@@ -1,9 +1,6 @@
 package com.schat.app.ui
 
 import android.app.Application
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.schat.app.data.*
@@ -318,10 +315,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun retryPendingMsg(tempId: Long) {
         val target = _pendingMsgs.value.find { it.tempId == tempId } ?: return
         if (target.status != PendingStatus.FAILED) return
-        if (!isNetworkAvailable()) {
-            _error.tryEmit("无网络连接，请联网后重试")
-            return
-        }
         _pendingMsgs.update { list ->
             list.map { if (it.tempId == tempId) it.copy(status = PendingStatus.SENDING) else it }
         }
@@ -332,12 +325,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun dispatchText(pending: PendingMsg) {
         val convId = _currentConvId.value
         if (convId == 0L) return
-        // 断网快速失败：不发起请求，直接标记失败，避免长时间转圈
-        if (!isNetworkAvailable()) {
-            failPending(pending.tempId)
-            _error.tryEmit("无网络连接，点击红色消息重试")
-            return
-        }
         viewModelScope.launch {
             try {
                 val resp = ApiClient.api.sendMessage(
@@ -355,15 +342,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _error.tryEmit("发送失败，点击红色消息可重试")
             }
         }
-    }
-
-    /** 检查网络是否可用（Wi-Fi/蜂窝/以太网均可） */
-    private fun isNetworkAvailable(): Boolean {
-        val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return true // 拿不到服务时不拦截（降级放行，让 OkHttp 超时兜底）
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     private fun failPending(tempId: Long) {
