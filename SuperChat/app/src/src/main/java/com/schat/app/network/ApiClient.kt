@@ -39,9 +39,10 @@ object ApiClient {
     private val gson = Gson()
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)   // TCP 连接超时：断网时 8 秒放弃
+        .readTimeout(30, TimeUnit.SECONDS)     // 读取超时：服务端响应慢
+        .writeTimeout(60, TimeUnit.SECONDS)    // 写入超时：上传大文件
+        .callTimeout(15, TimeUnit.SECONDS)     // 整条请求兜底：DNS 卡住时 15 秒强制结束
         .addInterceptor { chain ->
             val builder = chain.request().newBuilder()
             token?.let { builder.addHeader("Authorization", "Bearer $it") }
